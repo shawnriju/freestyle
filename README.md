@@ -90,4 +90,3 @@ All settings are accessible from the tray icon > Settings:
 ## License
 
 [FSL (Fair Source License)](LICENSE)
-# freestyle
