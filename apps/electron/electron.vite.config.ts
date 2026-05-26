@@ -6,8 +6,9 @@ import { defineConfig } from "electron-vite";
 export default defineConfig({
   main: {
     build: {
-      externalizeDeps: {
-        exclude: ["@freestyle/server", "@sentry/electron"],
+      externalizeDeps: false,
+      rollupOptions: {
+        external: ["electron", "node-global-key-listener"],
       },
     },
   },
