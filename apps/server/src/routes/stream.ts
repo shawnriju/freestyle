@@ -3,6 +3,7 @@ import { Hono } from "hono";
 import { getDb } from "../lib/db.js";
 import { postProcess } from "../lib/post-process.js";
 import { getDefaultModels } from "../lib/providers.js";
+import { captureException, metrics } from "../lib/sentry.js";
 import { stripProviderPrefix } from "../lib/streaming/types.js";
 import {
   getApiKeyForProvider,
@@ -79,6 +80,10 @@ const stream = new Hono().get(
         if (row?.value) prompt = row.value;
       } catch {}
 
+      metrics.count("streaming.session_opened", 1, {
+        attributes: { provider: defaults.voice.provider },
+      });
+
       upstream = openStreamingSession({
         providerId: defaults.voice.provider,
         apiKey,
@@ -97,6 +102,25 @@ const stream = new Hono().get(
             if (process.env.NODE_ENV !== "production") {
               console.log(
                 `[stream] onFinal: rawText=${JSON.stringify(rawText)}, audioDurationMs=${audioDurationMs}, durationMs=${durationMs}`,
+              );
+            }
+
+            const streamTags = {
+              provider: voiceDefaults!.provider,
+              model: voiceDefaults!.model_id,
+            };
+            metrics.count("streaming.transcription_count", 1, {
+              attributes: streamTags,
+            });
+            metrics.distribution("streaming.latency", durationMs, {
+              unit: "millisecond",
+              attributes: streamTags,
+            });
+            if (audioDurationMs > 0) {
+              metrics.distribution(
+                "streaming.audio_duration",
+                audioDurationMs,
+                { unit: "millisecond", attributes: streamTags },
               );
             }
 
@@ -137,6 +161,7 @@ const stream = new Hono().get(
                 }
               })
               .catch((err) => {
+                captureException(err);
                 console.error("Post-processing failed:", err);
                 try {
                   const db = getDb();
