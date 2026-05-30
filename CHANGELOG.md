@@ -1,4 +1,15 @@
 # Changelog
+## 0.0.9
+
+### New Features ✨
+
+- Unify model picker cards by @shikhargen in [#96](https://github.com/freestyle-voice/freestyle/pull/96)
+
+### Bug Fixes 🐛
+
+- Update & restart button and download state tracking by @MathurAditya724 in [#98](https://github.com/freestyle-voice/freestyle/pull/98)
+- Remove feedback feature (#52) by @Olaiwonismail in [#74](https://github.com/freestyle-voice/freestyle/pull/74)
+
 ## 0.0.8
 
 ### New Features ✨
