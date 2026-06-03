@@ -44,7 +44,6 @@ import {
   Sparkles,
   Target,
   Trash2,
-  WifiOff,
   X,
   Zap,
 } from "lucide-react";
@@ -835,7 +834,6 @@ export default function ModelsPage(): React.JSX.Element {
       <PageHeader
         title="Models"
         subtitle="Choose how Freestyle listens — on-device for privacy, or cloud for speed and reach. Add an optional model to clean up what you say."
-        offline={isLocalWhisperActive || isLocalMlxActive}
       />
       <div className="space-y-4">
         <div ref={pairCardRef}>
@@ -1020,17 +1018,15 @@ function PageShell({
 }
 
 // ---------------------------------------------------------------------------
-// PageHeader — editorial title with italic accent + offline-ready badge
+// PageHeader — editorial title with italic accent
 // ---------------------------------------------------------------------------
 
 function PageHeader({
   title,
   subtitle,
-  offline,
 }: {
   title: string;
   subtitle?: string;
-  offline?: boolean;
 }): React.JSX.Element {
   return (
     <div className="mb-7 flex items-end justify-between gap-4">
@@ -1045,17 +1041,6 @@ function PageHeader({
           </p>
         )}
       </div>
-      {offline && (
-        <div className="bg-accent flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-3 py-1.5">
-          <WifiOff className="text-accent-foreground h-3 w-3" />
-          <span
-            className="mono text-accent-foreground text-[10px] uppercase"
-            style={{ letterSpacing: "0.1em" }}
-          >
-            Offline ready
-          </span>
-        </div>
-      )}
     </div>
   );
 }
@@ -1084,7 +1069,7 @@ function PairCard({
   return (
     <section className="border-border bg-card grid grid-cols-1 gap-6 rounded-[14px] border p-6 min-[820px]:grid-cols-2">
       <PairSide
-        kicker="Voice · required"
+        kicker="Voice model · required"
         modelName={voice?.model_name}
         providerName={voice ? displayName(voice.provider) : undefined}
         cta="Change"
@@ -1094,7 +1079,7 @@ function PairCard({
       />
       <div className="border-border border-t pt-6 min-[820px]:border-l min-[820px]:border-t-0 min-[820px]:pl-6 min-[820px]:pt-0">
         <PairSide
-          kicker="LLM cleanup · optional"
+          kicker="Post-processing model · optional"
           modelName={llmCleanup ? llm?.model_name : undefined}
           providerName={
             llmCleanup && llm ? displayName(llm.provider) : undefined
@@ -1142,7 +1127,7 @@ function PairSide({
       )}
     >
       <div className="flex items-center justify-between">
-        <Eyebrow text={kicker} accent={primary} />
+        <Eyebrow text={kicker} accent={primary} mono={false} />
         {onToggle !== undefined && (
           <Toggle on={!!toggle} onChange={(v) => onToggle(v)} />
         )}
@@ -1191,14 +1176,6 @@ function PairSide({
         >
           {cta}
         </button>
-        {primary && modelName && (
-          <span
-            className="mono text-primary"
-            style={{ fontSize: 10.5, letterSpacing: "0.14em" }}
-          >
-            READY
-          </span>
-        )}
       </div>
     </div>
   );
@@ -1207,14 +1184,17 @@ function PairSide({
 function Eyebrow({
   text,
   accent,
+  mono = true,
 }: {
   text: string;
   accent?: boolean;
+  mono?: boolean;
 }): React.JSX.Element {
   return (
     <span
       className={cn(
-        "mono text-[10px] uppercase",
+        "text-[10px] uppercase",
+        mono ? "mono" : "font-semibold",
         accent ? "text-primary" : "text-muted-foreground",
       )}
       style={{ letterSpacing: "0.14em" }}
