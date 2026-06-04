@@ -130,9 +130,12 @@ let mainWindow: BrowserWindow | null = null;
 let settingsWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
 let keyListener: NativeKeyListener | null = null;
-// Latching flag: once the native key listener (or globalShortcut fallback)
-// has started successfully, accessibility is confirmed. The flag persists
-// even when keyListener is temporarily torn down for hotkey recording.
+// Latching flag: set only once the native key listener has started
+// successfully, which requires Accessibility permission and therefore
+// proves it is granted. NOT set on the globalShortcut fallback, which
+// needs no permission and would otherwise produce a false positive. The
+// flag persists even when keyListener is temporarily torn down for hotkey
+// recording.
 let accessibilityConfirmed = false;
 let hotkeyPressed = false;
 let currentHotkeyAccel: string | null = null;
@@ -742,7 +745,9 @@ async function factoryReset(): Promise<void> {
     app.relaunch();
     app.exit(0);
   } catch (err) {
-    console.error("[factory-reset] failed:", err);
+    log.error(
+      `factory-reset failed: ${err instanceof Error ? err.message : String(err)}`,
+    );
     dialog.showErrorBox(
       "Hard Reset failed",
       `${err instanceof Error ? err.message : String(err)}\n\nThe app may be in a partially reset state. Quit and relaunch manually.`,
@@ -1079,10 +1084,6 @@ app.whenReady().then(async () => {
     if (process.platform === "darwin") {
       const { systemPreferences } = await import("electron");
       const trusted = systemPreferences.isTrustedAccessibilityClient(false);
-      // The Electron API can return a stale result when the code signature
-      // changes between builds. Cross-check with accessibilityConfirmed —
-      // a latching flag set when the native key listener (or globalShortcut
-      // fallback) starts successfully, proving accessibility is working.
       return trusted || accessibilityConfirmed;
     }
     return true;
@@ -1679,7 +1680,14 @@ async function registerHotkey(hotkey?: string): Promise<void> {
       }
     });
     if (registered) {
-      accessibilityConfirmed = true;
+      // Do NOT latch accessibilityConfirmed here. Registering a global
+      // shortcut requires no Accessibility permission on macOS, so a
+      // successful registration proves nothing about whether the app can
+      // post CGEvents / send Apple Events. Latching it here would make
+      // permissions:check-accessibility report a false positive, hide the
+      // "grant Accessibility" prompt during onboarding, and leave paste
+      // silently broken in the notarized prod build. Only the native key
+      // listener starting (above) is real proof of Accessibility.
     } else {
       let message = `Could not register hotkey "${accel}". Try a different key combination in Settings.`;
       if (
