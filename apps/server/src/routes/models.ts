@@ -167,7 +167,7 @@ const BUILTIN_VOICE_MODELS: AvailableModel[] = [
 
 // In-memory cache for models.dev data
 let modelsCache: { data: unknown; fetchedAt: number } | null = null;
-const CACHE_TTL_MS = 10 * 60 * 1000; // 10 minutes
+const CACHE_TTL_MS = 6 * 60 * 60 * 1000; // 6 hours
 
 async function fetchModelsFromRegistry(): Promise<Record<string, unknown>> {
   if (modelsCache && Date.now() - modelsCache.fetchedAt < CACHE_TTL_MS) {
