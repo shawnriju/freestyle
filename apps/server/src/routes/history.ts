@@ -27,11 +27,18 @@ const ALLOWED_ORDER_COLUMNS = new Set([
 const history = new Hono()
   .get("/", (c) => {
     const db = getDb();
+    const DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
     const limit = Math.min(Number(c.req.query("limit") || 50), 200);
     const offset = Number(c.req.query("offset") || 0);
     const search = c.req.query("search")?.trim() || "";
-    const start_date = c.req.query("start_date");
-    const end_date = c.req.query("end_date");
+    const start_date_param = c.req.query("start_date");
+    const end_date_param = c.req.query("end_date");
+    const start_date =
+      start_date_param && DATE_REGEX.test(start_date_param)
+        ? start_date_param
+        : null;
+    const end_date =
+      end_date_param && DATE_REGEX.test(end_date_param) ? end_date_param : null;
     const orderByParam = c.req.query("orderBy") || "-created_at";
 
     // Parse orderBy: "-created_at" means DESC, "created_at" means ASC
@@ -67,13 +74,13 @@ const history = new Hono()
     const whereClause =
       conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
 
-    //Query rows
+    // Query rows
     const rowsQuery = `SELECT * FROM transcription_history ${whereClause} ORDER BY ${orderColumn} ${orderDir} LIMIT ? OFFSET ?`;
     const rows = db
       .prepare(rowsQuery)
       .all(...params, limit, offset) as unknown as HistoryRow[];
 
-    //Query total count
+    // Query total count
     const countQuery = `SELECT COUNT(*) as count FROM transcription_history ${whereClause}`;
     const countRow = db.prepare(countQuery).get(...params) as { count: number };
 
@@ -87,8 +94,13 @@ const history = new Hono()
   .get("/stats", (c) => {
     const db = getDb();
 
-    const startDate = c.req.query("start_date");
-    const endDate = c.req.query("end_date");
+    const DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
+    const startDateParam = c.req.query("start_date");
+    const endDateParam = c.req.query("end_date");
+    const startDate =
+      startDateParam && DATE_REGEX.test(startDateParam) ? startDateParam : null;
+    const endDate =
+      endDateParam && DATE_REGEX.test(endDateParam) ? endDateParam : null;
 
     const conditions: string[] = [];
     const params: string[] = [];
@@ -135,6 +147,10 @@ const history = new Hono()
       total_words: number;
     };
 
+    const unfilteredCount = db
+      .prepare("SELECT COUNT(*) as count FROM transcription_history")
+      .get() as { count: number };
+
     // Use localtime to match the user's timezone for "today" boundary
     const today = db
       .prepare(
@@ -148,6 +164,7 @@ const history = new Hono()
       ...stats,
       today_sessions: today.sessions,
       today_cost: today.cost,
+      unfiltered_total_sessions: unfilteredCount.count,
     });
   })
   .get("/:id", (c) => {

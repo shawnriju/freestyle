@@ -44,6 +44,7 @@ interface Stats {
   total_words: number;
   today_sessions: number;
   today_cost: number;
+  unfiltered_total_sessions: number;
 }
 
 function formatClock(iso: string): string {
@@ -106,15 +107,53 @@ export default function HistoryPage(): React.JSX.Element {
   const [search, setSearch] = useState("");
   const [stats, setStats] = useState<Stats | null>(null);
   const [loading, setLoading] = useState(true);
-  const [startDate, setStartDate] = useState(() => {
-    const d = new Date();
-    d.setDate(d.getDate() - 7);
-    return getLocalDateString(d);
-  });
-  const [endDate, setEndDate] = useState(() => {
-    return getLocalDateString(new Date());
-  });
+  const [activePreset, setActivePreset] = useState<
+    "today" | "weekly" | "monthly" | "all-time" | "custom"
+  >("weekly");
+  const [customStartDate, setCustomStartDate] = useState("");
+  const [customEndDate, setCustomEndDate] = useState("");
   const [filterOpen, setFilterOpen] = useState(false);
+
+  // Calculate preset dates dynamically on every render
+  const todayStr = getLocalDateString(new Date());
+  const start7 = new Date();
+  start7.setDate(start7.getDate() - 7);
+  const start7Str = getLocalDateString(start7);
+  const start30 = new Date();
+  start30.setDate(start30.getDate() - 30);
+  const start30Str = getLocalDateString(start30);
+
+  let startDate = "";
+  let endDate = "";
+  if (activePreset === "today") {
+    startDate = todayStr;
+    endDate = todayStr;
+  } else if (activePreset === "weekly") {
+    startDate = start7Str;
+    endDate = todayStr;
+  } else if (activePreset === "monthly") {
+    startDate = start30Str;
+    endDate = todayStr;
+  } else if (activePreset === "custom") {
+    startDate = customStartDate;
+    endDate = customEndDate;
+  }
+
+  const isTodayPreset = activePreset === "today";
+  const isWeeklyPreset = activePreset === "weekly";
+  const isMonthlyPreset = activePreset === "monthly";
+  const isAllTimePreset = activePreset === "all-time";
+
+  const getTimeLabel = (): string => {
+    if (activePreset === "weekly") return "past 7 days";
+    if (activePreset === "today") return "today";
+    if (activePreset === "monthly") return "past 30 days";
+    if (activePreset === "all-time") return "all time";
+    return "filtered"; // custom range
+  };
+  const timeLabel = getTimeLabel();
+
+  const filterCount = activePreset !== "weekly" ? 1 : 0;
 
   const loadData = useCallback(async () => {
     try {
@@ -195,20 +234,7 @@ export default function HistoryPage(): React.JSX.Element {
     );
   }
 
-  const todayStr = getLocalDateString(new Date());
-  const start7 = new Date();
-  start7.setDate(start7.getDate() - 7);
-  const start7Str = getLocalDateString(start7);
-  const start30 = new Date();
-  start30.setDate(start30.getDate() - 30);
-  const start30Str = getLocalDateString(start30);
-
-  const isTodayPreset = startDate === todayStr && endDate === todayStr;
-  const isWeeklyPreset = startDate === start7Str && endDate === todayStr;
-  const isMonthlyPreset = startDate === start30Str && endDate === todayStr;
-  const isAllTimePreset = startDate === "" && endDate === "";
-
-  const isGenuineEmpty = total === 0 && !search && !startDate && !endDate;
+  const isGenuineEmpty = stats?.unfiltered_total_sessions === 0;
 
   return (
     <div
@@ -230,9 +256,12 @@ export default function HistoryPage(): React.JSX.Element {
             <div className="border-border mb-7 grid grid-cols-2 gap-2.5 border-b pb-7 md:grid-cols-4">
               <Stat
                 n={(stats?.total_words ?? 0).toLocaleString()}
-                l={startDate || endDate ? "words filtered" : "words all time"}
+                l={`words · ${timeLabel}`}
               />
-              <Stat n={String(stats?.total_sessions ?? 0)} l="sessions" />
+              <Stat
+                n={String(stats?.total_sessions ?? 0)}
+                l={`sessions · ${timeLabel}`}
+              />
               <Stat
                 n={
                   stats && stats.avg_duration_ms > 0
@@ -244,7 +273,7 @@ export default function HistoryPage(): React.JSX.Element {
               <Stat
                 accent
                 n={`$${(stats?.total_cost_usd ?? 0).toFixed(2)}`}
-                l={startDate || endDate ? "cost · filtered" : "cost · all time"}
+                l={`cost · ${timeLabel}`}
               />
             </div>
 
@@ -271,15 +300,14 @@ export default function HistoryPage(): React.JSX.Element {
                 onClick={() => setFilterOpen(true)}
                 className={cn(
                   "border-border bg-card hover:bg-accent hover:text-foreground text-muted-foreground flex items-center gap-1.5 rounded-lg border px-3.5 py-2 text-[13px] font-medium transition-colors cursor-pointer",
-                  (startDate || endDate) &&
-                    "border-primary text-primary bg-primary/5",
+                  filterCount > 0 && "border-primary text-primary bg-primary/5",
                 )}
               >
                 <Filter className="h-3.5 w-3.5" />
                 <span>Filters</span>
-                {(startDate || endDate) && (
+                {filterCount > 0 && (
                   <span className="bg-primary text-primary-foreground flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[9px] font-bold">
-                    ✓
+                    {filterCount}
                   </span>
                 )}
               </button>
@@ -291,8 +319,9 @@ export default function HistoryPage(): React.JSX.Element {
                 hasDates={!!(startDate || endDate)}
                 onClear={() => {
                   setSearch("");
-                  setStartDate("");
-                  setEndDate("");
+                  setActivePreset("weekly");
+                  setCustomStartDate("");
+                  setCustomEndDate("");
                   setPage(0);
                 }}
               />
@@ -380,10 +409,13 @@ export default function HistoryPage(): React.JSX.Element {
                 max={endDate || undefined}
                 onChange={(e) => {
                   const val = e.target.value;
+                  setActivePreset("custom");
                   if (endDate && val > endDate) {
-                    setStartDate(endDate);
+                    setCustomStartDate(endDate);
+                    setCustomEndDate(endDate);
                   } else {
-                    setStartDate(val);
+                    setCustomStartDate(val);
+                    setCustomEndDate(endDate);
                   }
                   setPage(0);
                 }}
@@ -405,10 +437,13 @@ export default function HistoryPage(): React.JSX.Element {
                 min={startDate || undefined}
                 onChange={(e) => {
                   const val = e.target.value;
+                  setActivePreset("custom");
                   if (startDate && val < startDate) {
-                    setEndDate(startDate);
+                    setCustomEndDate(startDate);
+                    setCustomStartDate(startDate);
                   } else {
-                    setEndDate(val);
+                    setCustomEndDate(val);
+                    setCustomStartDate(startDate);
                   }
                   setPage(0);
                 }}
@@ -425,8 +460,7 @@ export default function HistoryPage(): React.JSX.Element {
                 <button
                   type="button"
                   onClick={() => {
-                    setStartDate(todayStr);
-                    setEndDate(todayStr);
+                    setActivePreset("today");
                     setPage(0);
                   }}
                   className={cn(
@@ -440,8 +474,7 @@ export default function HistoryPage(): React.JSX.Element {
                 <button
                   type="button"
                   onClick={() => {
-                    setStartDate(start7Str);
-                    setEndDate(todayStr);
+                    setActivePreset("weekly");
                     setPage(0);
                   }}
                   className={cn(
@@ -455,8 +488,7 @@ export default function HistoryPage(): React.JSX.Element {
                 <button
                   type="button"
                   onClick={() => {
-                    setStartDate(start30Str);
-                    setEndDate(todayStr);
+                    setActivePreset("monthly");
                     setPage(0);
                   }}
                   className={cn(
@@ -470,8 +502,7 @@ export default function HistoryPage(): React.JSX.Element {
                 <button
                   type="button"
                   onClick={() => {
-                    setStartDate("");
-                    setEndDate("");
+                    setActivePreset("all-time");
                     setPage(0);
                   }}
                   className={cn(
@@ -490,8 +521,9 @@ export default function HistoryPage(): React.JSX.Element {
             <button
               type="button"
               onClick={() => {
-                setStartDate("");
-                setEndDate("");
+                setActivePreset("weekly");
+                setCustomStartDate("");
+                setCustomEndDate("");
                 setPage(0);
               }}
               className="border-border bg-card hover:bg-accent hover:text-foreground text-muted-foreground flex-1 rounded-md border py-2 text-sm font-medium transition-colors cursor-pointer text-center"
@@ -503,7 +535,7 @@ export default function HistoryPage(): React.JSX.Element {
               onClick={() => setFilterOpen(false)}
               className="bg-primary text-primary-foreground hover:bg-primary/90 flex-1 py-2 rounded-md text-sm font-medium transition-colors cursor-pointer text-center"
             >
-              Apply Filters
+              Done
             </button>
           </div>
         </SheetContent>
